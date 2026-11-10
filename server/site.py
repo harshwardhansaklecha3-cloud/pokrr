@@ -25,8 +25,13 @@ SITE_URL = FIXED_URL or "http://localhost:8000"     # replaced per request (see 
 NAME = "POKRR"
 TAGLINE = "Free poker variations with play chips"
 REPO_URL = os.environ.get("REPO_URL", "")
+# Search Console / Bing Webmaster "HTML tag" verification codes (set on the host)
+VERIFY = "".join(
+    f'<meta name="{n}" content="{html.escape(os.environ[k])}">' + "\n"
+    for k, n in (("GOOGLE_SITE_VERIFICATION", "google-site-verification"),
+                 ("BING_SITE_VERIFICATION", "msvalidate.01")) if os.environ.get(k))
 UPDATED = date(2026, 11, 10).isoformat()
-ASSET_V = "2"
+ASSET_V = "4"
 
 e = html.escape
 
@@ -146,6 +151,51 @@ TP_RANKS = [
     ("High card", "None of the above.", ["Ks", "Jh", "6c"], 16440),
 ]
 
+SHOTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "web", "shots")
+
+
+def has_shot(name: str) -> bool:
+    return os.path.exists(os.path.join(SHOTS_DIR, f"{name}.jpg"))
+
+
+def shot(name: str, alt: str, cls: str = "shot", eager: bool = False) -> str:
+    """A screenshot from web/shots/ (made by tools/site_shots.py), or nothing."""
+    if not has_shot(name):
+        return ""
+    phone = name.endswith("-phone")
+    w, h = (780, 1688) if phone else (1280, 800)
+    return (f'<img class="{cls}" src="/static/shots/{name}.jpg" width="{w}" height="{h}" '
+            f'alt="{e(alt)}" {"fetchpriority=\"high\"" if eager else "loading=\"lazy\""} decoding="async">')
+
+
+# Pineapple and Anaconda: shown as games of their own that you can stack on
+# any board above (the mechanics are the add-ons in engine/variants/base.py).
+MODES = {
+    "pineapple": ("Pineapple", "🍍",
+                  "Get extra private cards, then throw some away as the hand goes on.",
+                  "Pineapple sits on top of any board game: Pineapple Hold'em, Pineapple Pyramid, "
+                  "Pineapple Elevator… Throw away 1 card before the flop for classic Pineapple, after "
+                  "the flop for Crazy Pineapple, or 2 after the flop for Irish poker.",
+                  ["After a betting round, everyone still in the hand throws away 1 or 2 private "
+                   "cards, face down. They're gone for good.",
+                   "When: before the flop (classic Pineapple), after the flop (Crazy Pineapple), or "
+                   "after every betting round except the last.",
+                   "4 private cards, throw 2 after the flop = Irish poker.",
+                   "If too few cards would be left to make a hand, everyone is dealt just enough extra "
+                   "private cards at the start.",
+                   "Can't be combined with Anaconda."]),
+    "anaconda": ("Anaconda", "🐍",
+                 "Pass a private card to the player on your left: what you give away helps them.",
+                 "Anaconda sits on top of any board game with 2 or more private cards. Every pass is "
+                 "a choice: break up your own hand, or hand a neighbour something useful?",
+                 ["After the flop betting (or after every betting round from the flop on), everyone "
+                  "still in the hand passes 1 private card to the next player on their left.",
+                  "All passes happen at the same time; you see your new card after you've passed.",
+                  "Needs at least 2 private cards. Can't be combined with Pineapple."]),
+}
+MODE_OF = {"pineapple": ("pineapple", "preflop"), "anaconda": ("anaconda", "flop")}
+
+
 SUIT = {"s": ("♠", "b"), "c": ("♣", "b"), "h": ("♥", "r"), "d": ("♦", "r")}
 
 
@@ -161,8 +211,11 @@ def cards(codes) -> str:
 
 
 # ---------------------------------------------------------------- page shell
-def page(path: str, title: str, desc: str, body: str, *, crumbs=(), extra_ld=()) -> str:
+def page(path: str, title: str, desc: str, body: str, *, crumbs=(), extra_ld=(),
+         image: str = "") -> str:
     url = SITE_URL + path
+    og_image = (f"{SITE_URL}/static/shots/{image}.jpg" if image and has_shot(image)
+                else f"{SITE_URL}/static/icon-512.png")
     lds = [{"@context": "https://schema.org", "@type": "WebPage", "name": title,
             "description": desc, "url": url, "dateModified": UPDATED,
             "isPartOf": {"@type": "WebSite", "name": NAME, "url": SITE_URL + "/"}}]
@@ -194,15 +247,15 @@ def page(path: str, title: str, desc: str, body: str, *, crumbs=(), extra_ld=())
 <meta property="og:title" content="{e(full_title)}">
 <meta property="og:description" content="{e(desc)}">
 <meta property="og:url" content="{url}">
-<meta property="og:image" content="{SITE_URL}/static/icon-512.png">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="{og_image}">
+<meta name="twitter:card" content="{'summary_large_image' if image and has_shot(image) else 'summary'}">
 <meta name="theme-color" content="#000000">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <link rel="icon" type="image/png" href="/static/icon-192.png">
 <link rel="apple-touch-icon" href="/static/icon-180.png">
 <link rel="alternate" type="text/plain" title="LLM summary" href="/llms.txt">
 <link rel="stylesheet" href="/static/site.css?v={ASSET_V}">
-{ld}
+{VERIFY}{ld}
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -262,12 +315,23 @@ def game_slug(fid: str) -> str:
     return fid.replace("_", "-")
 
 
+def tile(href: str, name: str, pitch: str, img: str) -> str:
+    pic = shot(img, f"{name} poker table on POKRR", "thumb") if img else ""
+    return f'<a class="tile" href="{href}">{pic}<b>{e(name)}</b><span>{e(pitch)}</span></a>'
+
+
+def all_tiles() -> str:
+    games = "".join(tile(f"/games/{game_slug(fid)}", f.name, INTRO.get(fid, (f.pitch,))[0], game_slug(fid))
+                    for fid, f in FAMILIES.items())
+    modes = "".join(tile(f"/games/{m}", f"{icon} {name}", one, m)
+                    for m, (name, icon, one, _, _) in MODES.items())
+    return (f'<div class="tiles">{games}</div><h3 class="mode-head">Play any of them with…</h3>'
+            f'<div class="tiles">{modes}</div>')
+
+
 # ---------------------------------------------------------------- pages
 def home() -> str:
-    tiles = "".join(
-        f'<a class="tile" href="/games/{game_slug(fid)}"><b>{e(f.name)}</b>'
-        f'<span>{e(INTRO.get(fid, (f.pitch,))[0])}</span></a>'
-        for fid, f in FAMILIES.items())
+    tiles = all_tiles()
     faq = [
         ("Is POKRR free?", "Yes, completely. POKRR uses play chips only: no real money, no payments, "
                            "no ads and no sign-up. It is free and open source."),
@@ -293,6 +357,8 @@ def home() -> str:
               "genre": "Card game", "operatingSystem": "Any (web browser)",
               "offers": {"@type": "Offer", "price": "0", "priceCurrency": "INR"},
               "isAccessibleForFree": True,
+              "screenshot": [f"{SITE_URL}/static/shots/{n}.jpg" for n in ("classic", "pyramid", "floors")
+                             if has_shot(n)],
               "description": "Free browser poker with play chips: Texas Hold'em, Omaha and dozens "
                              "of variations with friends or bots. No money, no ads, no sign-up."}
     site_ld = {"@context": "https://schema.org", "@type": "WebSite", "name": NAME,
@@ -306,11 +372,31 @@ def home() -> str:
   <p><a class="btn" href="/play">Play now, free</a>
      <a class="btn ghost" href="/learn/how-to-play">New to poker? Start here</a></p>
   <ul class="facts">
-    <li><b>15</b> game families</li>
+    <li><b>15</b> games + Pineapple &amp; Anaconda</li>
     <li><b>500,000+</b> game combinations</li>
     <li><b>2–6</b> players + bots</li>
     <li><b>0</b> real money</li>
   </ul>
+  <div class="hero-shots">
+    {shot("pyramid", "A game of Pyramid poker on POKRR: a 15-card pyramid board, your cards and the bets", "hero-shot", eager=True)}
+    {shot("floors-phone", "Elevator floors on a phone: three floors with free jokers", "phone-shot", eager=True)}
+  </div>
+</section>
+
+<section>
+  <h2>See it in action</h2>
+  <div class="gallery">
+    {"".join(f'<a href="/games/{n}"><figure>{shot(n, f"{c} on POKRR")}<figcaption>{e(c)}</figcaption></figure></a>'
+             for n, c in (("classic", "Texas Hold'em"), ("tictactoe", "Tic-tac-toe poker"),
+                          ("chowaha", "Chowaha"), ("wallstreet", "Wall Street"),
+                          ("double", "Double board"), ("wild", "Hold'em with jokers"))
+             if has_shot(n))}
+  </div>
+  <div class="phones">
+    {"".join(shot(f"{n}-phone", f"{c} on a phone", "phone-shot") for n, c in
+             (("classic", "Texas Hold'em"), ("pyramid", "Pyramid"), ("tictactoe", "Tic-tac-toe")))}
+  </div>
+  <p class="muted">Works on phones (upright or sideways), tablets and computers.</p>
 </section>
 
 <section>
@@ -325,7 +411,7 @@ def home() -> str:
 
 <section>
   <h2>The games</h2>
-  <div class="tiles">{tiles}</div>
+  {tiles}
   <p><a href="/learn/add-ons">Add-ons</a>: wild cards, jokers, Anaconda, Pineapple, dice, the
   Joker auction, Short and Royal decks and the 7-2 bounty, which you can mix into most games.</p>
 </section>
@@ -349,21 +435,20 @@ def home() -> str:
     return page("/", f"{NAME}: free poker variations with play chips",
                 "Play free poker in your browser with play chips: Texas Hold'em, Omaha and dozens of "
                 "variations like Pyramid, Elevator and Tic-tac-toe poker, with friends or bots. No "
-                "money, no ads, no sign-up.", body, extra_ld=(site_ld, app_ld, faq_ld))
+                "money, no ads, no sign-up.", body, extra_ld=(site_ld, app_ld, faq_ld), image="pyramid")
 
 
 def games_index() -> str:
-    rows = "".join(
-        f'<a class="tile" href="/games/{game_slug(fid)}"><b>{e(f.name)}</b>'
-        f'<span>{e(INTRO.get(fid, (f.pitch,))[0])}</span></a>' for fid, f in FAMILIES.items())
+    rows = all_tiles()
     body = f"""<h1>Poker variations</h1>
 <p class="lead">Every game on POKRR, with its exact rules. Each one can be changed with options
-(cards, hand rule, pot) and <a href="/learn/add-ons">add-ons</a>.</p>
-<div class="tiles">{rows}</div>"""
+(cards, hand rule, pot) and <a href="/learn/add-ons">add-ons</a>, and played with Pineapple or
+Anaconda on top.</p>
+{rows}"""
     return page("/games", "All poker variations",
                 "Rules for every poker variation on POKRR: Hold'em, Omaha, Hi-Lo, Pyramid, Elevator "
                 "floors, Tic-tac-toe, Red River, Chowaha, Iron Cross, Blackjack Hold'em, Wall Street "
-                "and more.", body, crumbs=(("Games", "/games"),))
+                "and more.", body, crumbs=(("Games", "/games"),), image="classic")
 
 
 def game_page(fid: str) -> str:
@@ -378,6 +463,7 @@ def game_page(fid: str) -> str:
                      for g, f in FAMILIES.items() if g != fid)
     body = f"""<h1>{e(fam.name)}</h1>
 <p class="lead">{e(one)}</p>
+{shot(game_slug(fid), f"A hand of {fam.name} on POKRR: the board, your cards and the other players", "page-shot", eager=True)}
 <p>{e(more)}</p>
 <h2>Rules ({e(v.name)})</h2>
 <ul class="rules">{"".join(f"<li>{e(x)}</li>" for x in v.summary)}</ul>
@@ -390,7 +476,7 @@ cards; a weaker claim counts.</p>
 {f"<p><b>Not with this game:</b> {e(', '.join(no))}. <a href='/learn/add-ons#rules'>Why?</a></p>" if no else ""}
 <p><a class="btn" href="/play">Play {e(fam.name)} free</a></p>
 <h2>More games</h2>
-<ul class="cols">{others}</ul>"""
+<ul class="cols">{others}{"".join(f'<li><a href="/games/{m}">{e(x[0])}</a></li>' for m, x in MODES.items())}</ul>"""
     desc = f"{fam.name} poker rules: {one} Play it free with friends or bots on POKRR (play chips only)."
     game_ld = {"@context": "https://schema.org", "@type": "Game", "name": f"{fam.name} (poker variation)",
                "description": one, "url": f"{SITE_URL}/games/{game_slug(fid)}",
@@ -398,7 +484,37 @@ cards; a weaker claim counts.</p>
                    "@type": "QuantitativeValue", "minValue": 2, "maxValue": min(6, v.max_players)}}
     return page(f"/games/{game_slug(fid)}", f"{fam.name} poker: rules and how to play", desc, body,
                 crumbs=(("Games", "/games"), (fam.name, f"/games/{game_slug(fid)}")),
-                extra_ld=(game_ld,))
+                extra_ld=(game_ld,), image=game_slug(fid))
+
+
+def mode_page(key: str) -> str:
+    name, icon, one, more, rules = MODES[key]
+    field, value = MODE_OF[key]
+    fits, not_fit = [], []
+    for fid, fam in FAMILIES.items():
+        st = TableSettings(500, 10, 10, fid, tuple(sorted((o.key, o.default) for o in fam.options)),
+                           claim=True, **{field: value})
+        try:
+            st.variant().validate(3)
+            fits.append(fam.name)
+        except Exception:
+            not_fit.append(fam.name)
+    body = f"""<h1>{icon} {e(name)}</h1>
+<p class="lead">{e(one)}</p>
+{shot(key, f"{name} Hold'em on POKRR", "page-shot", eager=True)}
+<p>{e(more)}</p>
+<h2>Rules</h2>
+<ul class="rules">{"".join(f"<li>{e(x)}</li>" for x in rules)}</ul>
+<h2>Play it with</h2>
+<p>{e(", ".join(fits))}.</p>
+{f"<p><b>Not with:</b> {e(', '.join(not_fit))}.</p>" if not_fit else ""}
+<p class="muted">On the dealer's-choice screen, pick a game and then tap {icon} {e(name)} under
+"Play it with…". Choose when it happens under Add-ons.</p>
+<p><a class="btn" href="/play">Play {e(name)} free</a></p>"""
+    return page(f"/games/{key}", f"{name} poker: rules and how to play",
+                f"{name} poker rules: {one} Play {name} Hold'em, {name} Omaha and more free on POKRR, "
+                "with play chips only.", body,
+                crumbs=(("Games", "/games"), (name, f"/games/{key}")), image=key)
 
 
 def rankings() -> str:
@@ -561,6 +677,8 @@ browser only ever receives your own private cards, never anyone else's or the de
 PAGES = {"/": home, "/games": games_index, "/learn/hand-rankings": rankings,
          "/learn/teen-patti-rankings": tp_rankings, "/learn/how-to-play": how_to_play,
          "/learn/add-ons": addons_page, "/about": about}
+for _m in MODES:
+    PAGES[f"/games/{_m}"] = (lambda m=_m: mode_page(m))
 for _fid in FAMILIES:
     PAGES[f"/games/{game_slug(_fid)}"] = (lambda f=_fid: game_page(f))
 
@@ -603,6 +721,10 @@ def llms_txt(full: bool = False) -> str:
         if full:
             v = default_variant(fid)
             out += [f"  - {x}" for x in v.summary]
+    for m, (name, icon, one, _, rules) in MODES.items():
+        out.append(f"- [{name}]({SITE_URL}/games/{m}): {one} (played on top of another game)")
+        if full:
+            out += [f"  - {x}" for x in rules]
     if full:
         out += ["", "## Add-ons"]
         for title, note, items in ADDONS:

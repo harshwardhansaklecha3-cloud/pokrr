@@ -7,7 +7,7 @@ link or a 5-letter table code) or with bots. The dealer picks the game every han
 add-ons (wild cards, jokers, Anaconda, Pineapple, dice, Short/Royal decks…) give over
 500,000 combinations (512,536 counted).
 
-Website: being set up (free hosting first, own domain later).
+Play it: <https://pokrr.onrender.com> (free hosting; the first visit after a quiet spell takes ~1 minute to wake up)
 
 ## Games
 Classic board (Hold'em / Omaha / any number of cards), Double board, Shared-card rows (2or3,

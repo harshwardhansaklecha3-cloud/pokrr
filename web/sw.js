@@ -1,9 +1,9 @@
 // POKRR offline support: the home page, guides and game rules keep working
 // without internet once opened (newest copy when online, saved copy when
 // offline). The live game itself needs a connection and is never cached here.
-const CACHE = "pokrr-guides-v2";
+const CACHE = "pokrr-guides-v4";
 const PRECACHE = ["/", "/games", "/learn/hand-rankings", "/learn/teen-patti-rankings",
-                  "/learn/how-to-play", "/learn/add-ons", "/about", "/static/site.css?v=2",
+                  "/learn/how-to-play", "/learn/add-ons", "/about", "/static/site.css?v=4",
                   "/static/icon-192.png"];
 
 self.addEventListener("install", (ev) => {

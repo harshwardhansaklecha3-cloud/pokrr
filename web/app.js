@@ -410,9 +410,12 @@ function render(fx = true) {
 
 const MONSTERS = new Set(["Royal flush", "Straight flush", "Four of a kind", "Trail", "Pure sequence"]);
 function royal() {           // the rarest hand gets the full treatment
-  flash(); setTimeout(flash, 450);
-  banner("👑 Royal flush 👑", "big gold royal");
-  sfx("win");
+  showcase("Royal Flush", "the best hand in poker", "royal");
+  const c = $("board") ? center($("board").getBoundingClientRect()) : { x: innerWidth / 2, y: innerHeight / 2 };
+  sparkle(c.x, c.y, 46, { suits: true, spread: 1.25 });
+  setTimeout(() => sparkle(c.x, c.y, 26, { suits: false, spread: .9 }), 650);
+  document.querySelectorAll(".card.used").forEach((e, k) => setTimeout(() => glint(e), 250 + k * 110));
+  sfx("royal");
 }
 function revealOrder(s) {
   // clockwise starting with the first player left of the dealer button
@@ -471,7 +474,12 @@ function revealStep() {
       bubble(st.seat, row ? `${row.row_label.replace(/\s*\(.*\)/, "")}: ${label}` : label,
              "claim" + (plain === "Royal flush" ? " monster royal" : MONSTERS.has(plain) ? " monster" : ""));
       if (plain === "Royal flush") royal();
-      else if (MONSTERS.has(plain)) flash();
+      else if (MONSTERS.has(plain)) {
+        flash();
+        const av = document.querySelector(`[data-avatar="${seat}"]`);
+        if (av) { const c = center(av.getBoundingClientRect()); sparkle(c.x, c.y, 18, { spread: .6 }); }
+        document.querySelectorAll(".card.used").forEach((e, k) => setTimeout(() => glint(e), k * 90));
+      }
     }
     sfx("flip");
   } else if (st.type === "rowwin") {
@@ -1339,9 +1347,33 @@ function renderPicker() {
     const rnd = el("button", "preset random", `<b>🎲 Random</b><span>Any game, any options, maybe a joker</span>`);
     rnd.onclick = () => send({ type: "random" });
     list.appendChild(rnd);
+    panel.appendChild(el("div", "muted pick-hint", "Pick a game. Add <b>Pineapple</b> or <b>Anaconda</b> on top if you like: two games in one hand."));
     cat.forEach(fp => {
       const b = el("button", "preset" + (fp.id === fam.id ? " on" : ""), `<b>${esc(fp.name)}</b><span>${esc(fp.pitch)}</span>`);
       b.onclick = () => { choice.variant_id = fp.id; choice.options = {}; renderPicker(); };
+      list.appendChild(b);
+    });
+    // Pineapple and Anaconda: shown as games you can stack on the one above.
+    // (Mechanically they're still the add-ons; their timing is under Add-ons.)
+    list.appendChild(el("div", "opt-sep mode-sep", "Play it with…"));
+    const modes = [
+      ["pineapple", "🍍 Pineapple", "Throw away private cards as the hand goes on",
+       () => (choice.pineapple || "off") !== "off",
+       on => { choice.pineapple = on ? "off" : (choice.pineapple_last || "preflop"); if (!on) choice.anaconda = "off"; }],
+      ["anaconda", "🐍 Anaconda", "Pass a private card to the player on your left",
+       () => (choice.anaconda || "off") !== "off",
+       on => { choice.anaconda = on ? "off" : (choice.anaconda_last || "flop"); if (!on) choice.pineapple = "off"; }],
+    ];
+    modes.forEach(([key, name, pitch, isOn, toggle]) => {
+      const on = isOn();
+      const why = !on && blk[key] && Object.values(blk[key])[0];
+      const b = el("button", "preset mode" + (on ? " on" : "") + (why ? " blocked" : ""),
+        `<b>${name}${on ? " ✓" : ""}</b><span>${esc(why || pitch)}</span>`);
+      if (why) b.disabled = true;
+      b.onclick = () => {
+        if (on) choice[key + "_last"] = choice[key];
+        toggle(on); renderPicker();
+      };
       list.appendChild(b);
     });
     panel.appendChild(list);
@@ -1459,12 +1491,55 @@ function banner(text, cls = "") {
   const b = el("div", "banner " + cls, esc(text)); $("fx").appendChild(b);
   setTimeout(() => b.remove(), cls.includes("big") ? 2600 : 1800);
 }
-function flash() {           // gold flash for monster hands
-  const f = el("div", "flash"); $("fx").appendChild(f); setTimeout(() => f.remove(), 900);
+function flash() {           // a soft gold bloom for monster hands
+  const f = el("div", "flash"); $("fx").appendChild(f); setTimeout(() => f.remove(), 1400);
 }
-function shake() {           // the table jolts for an all-in
-  $("screen").animate([{ translate: "0 0" }, { translate: "-6px 2px" }, { translate: "6px -2px" },
-    { translate: "-4px 1px" }, { translate: "3px 0" }, { translate: "0 0" }], { duration: 420 });
+// A calm "moment" card: glass panel, eased in, eased out (all-in, royal flush).
+function showcase(title, sub, cls) {
+  document.querySelectorAll("#fx .showcase, #fx .banner").forEach(x => x.remove());
+  if (!$("modal").hidden) return;
+  const veil = cls === "royal" ? el("div", "veil") : null;
+  if (veil) { $("fx").appendChild(veil); setTimeout(() => veil.remove(), 3400); }
+  const b = el("div", "showcase " + cls,
+    (cls === "royal" ? `<span class="crown">♛</span>` : "") +
+    `<span class="sc-title">${esc(title)}</span>` + (sub ? `<span class="sc-sub">${esc(sub)}</span>` : ""));
+  $("fx").appendChild(b);
+  setTimeout(() => b.remove(), cls === "royal" ? 3400 : 2100);
+}
+// A seat glows for a moment (all-in).
+function seatGlow(seat, cls) {
+  const t = document.querySelector(`[data-avatar="${seat}"]`);
+  const tile = t && (t.closest(".player, .me-panel") || t);
+  if (!tile) return;
+  tile.classList.remove(cls); void tile.offsetWidth; tile.classList.add(cls);
+  setTimeout(() => tile.classList.remove(cls), 2200);
+}
+// Sparkles (and card suits) drifting out from a point, with a little gravity.
+function sparkle(x, y, n, { suits = false, spread = 1 } = {}) {
+  if (REDUCED.matches) return;
+  const fx = $("fx"), glyphs = ["♠", "♥", "♦", "♣"];
+  for (let i = 0; i < n; i++) {
+    const suit = suits && i % 3 === 0;
+    const p = el("div", "spark" + (suit ? " suit" : ""), suit ? glyphs[i % 4] : "");
+    if (suit && (i % 4 === 1 || i % 4 === 2)) p.classList.add("red");
+    p.style.left = x + "px"; p.style.top = y + "px";
+    fx.appendChild(p);
+    const ang = Math.random() * Math.PI * 2, dist = (90 + Math.random() * 220) * spread;
+    const dx = Math.cos(ang) * dist, dy = Math.sin(ang) * dist * .75;
+    const dur = 1400 + Math.random() * 1100, rot = (Math.random() - .5) * 540;
+    p.animate([
+      { transform: "translate(-50%,-50%) scale(.3)", opacity: 0 },
+      { transform: `translate(calc(-50% + ${dx * .55}px), calc(-50% + ${dy * .55 - 30}px)) scale(1) rotate(${rot / 2}deg)`, opacity: 1, offset: .35 },
+      { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy + 70}px)) scale(.6) rotate(${rot}deg)`, opacity: 0 },
+    ], { duration: dur, delay: Math.random() * 180, easing: "cubic-bezier(.2,.7,.3,1)", fill: "both" })
+      .onfinish = () => p.remove();
+  }
+}
+// A light sweeps across a card.
+function glint(cardEl) {
+  if (!cardEl || REDUCED.matches) return;
+  cardEl.classList.remove("glint"); void cardEl.offsetWidth; cardEl.classList.add("glint");
+  setTimeout(() => cardEl.classList.remove("glint"), 1300);
 }
 
 // ------------------------------------------------------------- sound
@@ -1486,7 +1561,14 @@ function sfx(kind) {
   if (kind === "chips") { tone(2200, 0.05, "triangle", 0.05); tone(2600, 0.05, "triangle", 0.04, 0.05); }
   else if (kind === "card") tone(900, 0.04, "triangle", 0.03);
   else if (kind === "flip") { tone(500, 0.06, "square", 0.03); tone(750, 0.08, "triangle", 0.04, 0.05); }
-  else if (kind === "allin") { tone(110, 0.5, "sawtooth", 0.07); tone(82, 0.6, "sine", 0.1, 0.05); }
+  else if (kind === "allin") {            // a soft swell + chips sliding in
+    tone(146.8, 0.9, "sine", 0.07); tone(220, 0.8, "sine", 0.04, 0.06);
+    [0.18, 0.26, 0.33, 0.39].forEach((w, k) => tone(2400 - k * 180, 0.05, "triangle", 0.035, w));
+  }
+  else if (kind === "royal") {             // a slow, bright chord with a shimmer on top
+    [523.3, 659.3, 784, 1046.5].forEach((f, k) => tone(f, 1.6, "sine", 0.05, k * 0.09));
+    [2093, 2637, 3136, 2637, 3520].forEach((f, k) => tone(f, 0.18, "triangle", 0.018, 0.5 + k * 0.08));
+  }
   else if (kind === "win") [523, 659, 784, 1047].forEach((f, k) => tone(f, 0.22, "triangle", 0.07, k * 0.11));
   else if (kind === "turn") tone(880, 0.12, "sine", 0.05);
 }
@@ -1551,7 +1633,12 @@ function runEffects(rects) {
         : a === "call" ? `Call ${fmt(h.amount)}` : a === "bet" ? `Bet ${fmt(h.amount)}` : a === "raise" ? `Raise to ${fmt(h.amount)}`
         : a === "blind" ? (h.text.includes("small") ? `Small blind ${fmt(h.amount)}` : `Big blind ${fmt(h.amount)}`) : h.text;
       bubble(h.seat, text, h.all_in ? "allin" : a);
-      if (h.all_in) { banner("All-in!", "allin-banner"); shake(); sfx("allin"); }
+      if (h.all_in) {
+        const who = h.seat === s.you ? "You" : nameOf(h.seat);
+        showcase("All in", `${who} · ${fmt(h.amount)}`, "allin");
+        seatGlow(h.seat, "allin-glow");
+        sfx("allin");
+      }
       else if (a === "bet" || a === "raise" || a === "call") sfx("chips");
     } else if (h.kind === "board") {
       if (!s.result) banner(h.street);                    // hand over: the showdown takes over
@@ -1568,7 +1655,7 @@ function runEffects(rects) {
       bubble(h.seat, h.text.includes("stands") ? "Stand" : "Hit!", h.text.includes("stands") ? "check" : "call");
       sfx("card");
     } else if (h.kind === "bust") {
-      bubble(h.seat, "BUST!", "fold bust"); shake(); sfx("allin");
+      bubble(h.seat, "BUST!", "fold bust"); seatGlow(h.seat, "allin-glow"); sfx("chips");
     } else if (h.kind === "buy") {
       bubble(h.seat, `Buys ${h.cards[0].replace("T", "10")} · ${fmt(h.amount)}`, "bet"); sfx("chips");
     } else if (h.kind === "discard") {

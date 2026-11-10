@@ -89,3 +89,29 @@ footer a { color: var(--muted); }
   .top nav a:not(.cta) { font-size: .9rem; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+
+
+/* ---------- Screenshots (2026-11-10) ---------- */
+img.shot, img.hero-shot, img.page-shot, img.thumb, img.phone-shot { display: block; max-width: 100%; height: auto;
+  border-radius: 14px; border: 1px solid var(--line); background: #0b0b0d; }
+.hero-shots { position: relative; margin: 26px 0 6px; }
+.hero-shots .hero-shot { width: 100%; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+.hero-shots .phone-shot { position: absolute; right: -8px; bottom: -26px; width: 23%; border-radius: 22px;
+  border: 3px solid #2a2a2e; box-shadow: 0 20px 50px rgba(0,0,0,.7); }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.gallery a { text-decoration: none; color: var(--text); }
+.gallery figure { margin: 0; }
+.gallery figcaption { font-size: .92rem; color: var(--muted); margin-top: 6px; }
+.gallery a:hover img { border-color: var(--accent); }
+.phones { display: flex; gap: 14px; justify-content: center; margin: 20px 0 4px; }
+.phones .phone-shot { width: min(30%, 200px); border-radius: 22px; border: 3px solid #2a2a2e; }
+.page-shot { margin: 14px 0 6px; }
+.tile .thumb { border-radius: 9px; margin-bottom: 8px; aspect-ratio: 16 / 10; object-fit: cover; object-position: 30% 35%; }
+.mode-head { margin: 22px 0 10px; font-size: 1.05rem; color: var(--muted); font-weight: 600; }
+@media (max-width: 620px) {
+  .hero-shots .phone-shot { width: 30%; right: -4px; bottom: -18px; }
+}
+@media (max-width: 620px) {
+  .top { position: static; padding-top: 8px; padding-bottom: 8px; gap: 6px; }
+  .top nav { gap: 2px 12px; }
+}
