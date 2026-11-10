@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>POKRR</title>
+  <!-- "Add to Home Screen": opens full screen like an app -->
+  <link rel="manifest" href="/static/manifest.webmanifest">
+  <meta name="theme-color" content="#000000">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="POKRR">
+  <link rel="apple-touch-icon" href="/static/icon-180.png">
+  <link rel="icon" type="image/png" href="/static/icon-192.png">
+  <link rel="stylesheet" href="/static/style.css?v=54">
+</head>
+<body>
+  <!-- An ordinary page that follows the screen size (see docs/UI_REBUILD_PLAN.md). -->
+  <div id="screen">
+  <header>
+    <a class="brand" href="/" id="home-link" title="POKRR home: games, rules and guides">POKRR</a>
+    <span class="tag">play chips only</span>
+    <button id="room-chip" class="room-chip" title="Copy the invite link" hidden></button>
+    <span id="table-chips" class="table-chips" hidden></span>
+    <!-- on phones these sit in the ☰ menu -->
+    <div id="tools" class="tools">
+      <button id="leave" class="ghost leave" hidden>Leave table</button>
+      <button id="sound-btn" class="info-btn sound-btn" title="Sound on/off" aria-label="Sound on or off" hidden>🔊</button>
+      <button id="settings-btn" class="info-btn" title="Settings" aria-label="Settings">⚙</button>
+      <button id="info-btn" class="info-btn" title="Game rules &amp; hand history" aria-label="Game rules and hand history" hidden>i</button>
+    </div>
+    <button id="menu-btn" class="info-btn menu-btn" aria-label="Menu" title="Menu">☰</button>
+    <span id="conn" class="conn">connecting…</span>
+  </header>
+
+  <!-- Lobby -->
+  <section id="lobby" hidden>
+    <div class="lobby-art">
+      <div>
+        <p class="hero">POKRR</p>
+        <p class="sub">Any variation. Your table. Your rules.</p>
+      </div>
+      <div class="lobby-forms">
+      <label class="namebox">Your name <input id="your-name" maxlength="16" value="Player" autocomplete="nickname"></label>
+      <form id="join" class="sheet joinsheet">
+        <div class="formtitle">Join friends</div>
+        <label>Table code <input id="join-code" maxlength="5" placeholder="e.g. K7QXM" autocomplete="off"
+               autocapitalize="characters" spellcheck="false"></label>
+        <div id="join-note" class="muted"></div>
+        <button type="submit" class="primary">Join table</button>
+      </form>
+      <form id="setup" class="sheet">
+        <div class="formtitle">Start a table</div>
+        <label>Bots <select name="bots">
+          <option value="0">None — just friends</option>
+          <option>1</option><option>2</option><option selected>3</option>
+          <option>4</option><option>5</option></select></label>
+        <label>Bot level <select name="bot_level">
+          <option value="noob">Noob</option>
+          <option value="amateur" selected>Amateur</option>
+          <option value="tycoon">Tycoon</option>
+          <option value="mixed">Mixed (one of each)</option></select></label>
+        <label>Buy-in <input name="starting_stack" type="number" min="10" step="10" value="500"></label>
+        <label>Small blind <input name="small_blind" type="number" min="10" step="10" value="10"></label>
+        <label>Big blind <input name="big_blind" type="number" min="10" step="10" value="10"></label>
+        <button type="submit" class="primary">Start table</button>
+        <div class="muted small">You get a code and a link to invite friends. Bots fill the other seats; you can add or remove them later.</div>
+      </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- Game -->
+  <main id="game" hidden>
+    <section class="play">
+      <div id="opponents" class="opponents"></div>
+      <div class="middle">
+        <div id="deck" class="deck"><div class="card back"></div><div class="card back"></div><div class="card back"></div></div>
+        <div class="board-wrap">
+          <div id="stage" class="stage"></div>
+          <div id="board" class="board"></div>
+        </div>
+        <div id="pots" class="pots"></div>
+      </div>
+      <div id="declare" class="declare sheet" hidden></div>
+    </section>
+
+    <!-- Right panel: your hand and your actions, always in view -->
+    <aside class="side">
+      <div id="me" class="sheet me-panel"></div>
+      <div class="sheet action-panel">
+        <div class="label">Your move</div>
+        <div id="controls" class="controls"></div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- Info dialog: game rules + hand history (opened with the (i) button) -->
+  <div id="info-modal" class="modal" hidden>
+    <div class="modal-card info-card">
+      <div class="info-head">
+        <div id="variant-name" class="variant"></div>
+        <button id="info-close" class="ghost" aria-label="Close">✕</button>
+      </div>
+      <ul id="rules"></ul>
+      <div id="blinds" class="muted"></div>
+      <div class="label" style="margin-top:16px">Hand history</div>
+      <ol id="history"></ol>
+    </div>
+  </div>
+
+  <!-- Settings: learning hints and sound (saved in this browser) -->
+  <div id="settings-modal" class="modal" hidden>
+    <div class="modal-card info-card settings-card">
+      <div class="info-head">
+        <div class="variant">Settings</div>
+        <button id="settings-close" class="ghost" aria-label="Close">✕</button>
+      </div>
+      <label><span>Show my current hand<small>"You have: Two pair" while you play</small></span>
+        <input type="checkbox" id="set-myhand"></label>
+      <label><span>Show the nuts<small>The best hand anyone could have on this board</small></span>
+        <input type="checkbox" id="set-nuts"></label>
+      <label><span>Show the second-best hand<small>The next best possible hand on this board</small></span>
+        <input type="checkbox" id="set-second"></label>
+      <label><span>Sound effects</span><input type="checkbox" id="set-sound"></label>
+      <div class="muted" style="margin-top:12px">At showdown you always claim your own hand, whatever these hints say. Turn them off to test yourself.</div>
+    </div>
+  </div>
+
+  <!-- Between hands: result + dealer's choice -->
+  <div id="modal" class="modal" hidden>
+    <div class="modal-card">
+      <div id="result" class="result"></div>
+      <div id="picker" class="picker"></div>
+    </div>
+  </div>
+  </div><!-- /screen -->
+
+  <div id="safe-probe" aria-hidden="true"></div>
+  <div id="fx" class="fx"></div>
+  <div id="error" class="error" hidden></div>
+  <script src="/static/app.js?v=56"></script>
+</body>
+</html>

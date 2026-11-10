@@ -1,0 +1,22 @@
+# Render blueprint: one free web service that redeploys on every push to main.
+# (Render dashboard -> New -> Blueprint -> pick this repository.)
+services:
+  - type: web
+    name: pokrr
+    runtime: python
+    plan: free
+    branch: main
+    autoDeploy: true
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server.app:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips "*"
+    healthCheckPath: /healthz
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.14.3"
+      # Once you have your own domain, add it here (e.g. https://pokrr.example) for
+      # canonical links, the sitemap and llms.txt. Until then the site uses the
+      # address it's opened on.
+      # - key: SITE_URL
+      #   value: https://your-domain
+      - key: REPO_URL            # "Source code" link in the site footer
+        value: https://github.com/harshwardhansaklecha3-cloud/pokrr

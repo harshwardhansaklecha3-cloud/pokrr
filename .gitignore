@@ -1,0 +1,17 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# screen-check screenshots (made by tools/ui_check.py)
+tools/ui_shots/
+
+# local editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
